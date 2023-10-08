@@ -1,6 +1,7 @@
 import requests
 from flask_restful import Resource
-from backend.app.manga.lib.finder import finder
+from backend.database.database import collection
+from backend.app.manga.lib.utils import utils
 
 base_url = "https://api.mangadex.org"
 
@@ -15,15 +16,19 @@ class Manga(Resource):
 
     def get(self, title: str):
         # Todo: Implement looking in redis
+        record = collection.find_one({'details.attributes.title.en': f'/{title}/'})
 
-        record = finder.search_in_mongo({'title': title})
-        
+        print(record)
+
         if not record:
             # call the mangadex api to find the manga
             response = self.fetch(title)
+            _ = utils.insert_record(**response)
 
-            return response, 200
-
+            return {
+                manga['id']: manga['attributes']['title']['en']
+                for manga in response['data']
+            }
 
         return {'msg': 'no result found'}, 404
 
@@ -35,7 +40,10 @@ class Manga(Resource):
 
         response = requests.get(
             f"{base_url}/manga",
-            params={'title': title},
+            params={
+                'title': title,
+                'limit': 20,
+            },
         )
 
         # initial validation in case we didn't receivce any response from the API

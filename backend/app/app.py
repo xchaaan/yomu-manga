@@ -1,4 +1,5 @@
 from backend.app import restful
+from backend.database import database
 
 class Application:
 

@@ -21,6 +21,14 @@ class Utils:
             _ = collection.insert_one({'details': manga})
 
         return True
+    
+    @staticmethod
+    def transform_to_pascal_case(text: str):
+        return text.title()
+    
+    @staticmethod
+    def transform_to_key_format(text: str):
+        return text.replace(" ", "").lower()
 
 
 utils = Utils()

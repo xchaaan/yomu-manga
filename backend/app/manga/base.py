@@ -2,6 +2,7 @@ import requests
 from flask_restful import Resource
 from backend.database.database import collection
 from backend.app.manga.lib.utils import utils
+from backend.redis.redis import r
 
 base_url = "https://api.mangadex.org"
 
@@ -15,10 +16,21 @@ class Manga(Resource):
     """
 
     def get(self, title: str):
+        """
+        For database operation such as querying the title, 
+        we can transform the string into Pascal Case
+        as the title format from the mangadex API is always like that
+        This is much better instead of using wild card when looking for a record
+
+        On the other hand, we remove spaces and convert the title into all lowercase
+        So that we have a key for redis cache
+        """
+
+        # title_in_key_format = utils.transform_to_key_format(title)
+        # title_in_pascal_case = utils.transform_to_pascal_case(title)
+
         # Todo: Implement looking in redis
         record = collection.find_one({'details.attributes.title.en': f'/{title}/'})
-
-        print(record)
 
         if not record:
             # call the mangadex api to find the manga

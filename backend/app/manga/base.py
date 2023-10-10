@@ -1,49 +1,59 @@
 import requests
-from flask_restful import Resource
+from flask_restful import Resource, reqparse
 from backend.database.database import collection
 from backend.app.manga.lib.utils import utils
-from backend.redis.redis import r
-
-base_url = "https://api.mangadex.org"
+from backend.database.redis import r
+import json
 
 
 class Manga(Resource):
     """
-    Base class for fetching API from Mangadex
+    Class for searching manga title
     Request would be processed according to this order
     Request -> Redis (Search) -> Mongo (Search) -> Call Mangadex API
     Response -> Store to Mongo -> Send to the client
     """
+    base_url = "https://api.mangadex.org"
 
-    def get(self, title: str):
-        """
-        For database operation such as querying the title, 
-        we can transform the string into Pascal Case
-        as the title format from the mangadex API is always like that
-        This is much better instead of using wild card when looking for a record
 
-        On the other hand, we remove spaces and convert the title into all lowercase
-        So that we have a key for redis cache
-        """
+    def get(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('title', type=str, required=True)
+        args = parser.parse_args()
+        title = args['title']
 
-        # title_in_key_format = utils.transform_to_key_format(title)
-        # title_in_pascal_case = utils.transform_to_pascal_case(title)
+        # look the title in redis first to avoid processing request in database
+        title_in_key_format = utils.transform_to_key_format(title)
+        result = r.get(title_in_key_format)
 
-        # Todo: Implement looking in redis
-        record = collection.find_one({'details.attributes.title.en': f'/{title}/'})
+        if not result:
+            # look in database
+            title_in_pascal_case = utils.transform_to_pascal_case(title)
+            record = collection.find({
+                'details.attributes.title.en': {'$regex': title_in_pascal_case}
+            })
 
-        if not record:
-            # call the mangadex api to find the manga
-            response = self.fetch(title)
-            _ = utils.insert_record(**response)
+            wrapped_data = {}
+        
+            if (len(list(record.clone()))):
+                wrapped_data = utils.wrapped_response(record, from_db=True)
+                r.set(title_in_key_format, json.dumps(wrapped_data))
 
-            return {
-                manga['id']: manga['attributes']['title']['en']
-                for manga in response['data']
-            }
+            else:
+                # call the mangadex api to find the manga
+                # store the response in db and redis
+                response = self.fetch(title)
+                _ = utils.insert_record(**response)
+                wrapped_data = utils.wrapped_response(response, from_db=False)
 
-        return {'msg': 'no result found'}, 404
+                r.set(title_in_key_format, json.dumps(wrapped_data))
 
+            if not wrapped_data:
+                return {'msg': 'no result found'}, 404
+
+            return wrapped_data, 200
+
+        return json.loads(result), 200
 
     def fetch(self, title: str):
 
@@ -51,7 +61,7 @@ class Manga(Resource):
             return {'msg': 'title must be indicated.'}, 400
 
         response = requests.get(
-            f"{base_url}/manga",
+            f"{self.base_url}/manga",
             params={
                 'title': title,
                 'limit': 20,

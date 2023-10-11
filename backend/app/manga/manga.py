@@ -40,27 +40,31 @@ class Manga(Resource):
         # look first in the redis if we have cached the response
         response = r.get(manga_id)
 
-        # if response:
-        #     return json.loads(response), 200
+        if response:
+            return json.loads(response), 200
 
-        # # we can look into the database. this way we can avoid sending request
-        # chapter_docs = chapter_collection.find({
-        #     '$and': {
-        #         'details.relationships.id': manga_id,
-        #         'details.reationships.type': 'manga',
-        #     }
-        # })
+        # we can look into the database. this way we can avoid sending request
+        chapter_docs = chapter_collection.find({
+            '$and': [
+                {'details.relationships.type': 'manga',},
+                {'details.relationships.id': manga_id,},
+            ]
+        })
 
-        # response = self._fetch(manga_id)
+        if not list(chapter_docs.clone()):
+            response = self._fetch(manga_id)
 
-        if not response:
-            return {'msg': f'no available chapter found for {title_key}'}, 404
+            if not response:
+                return {'msg': f'no available chapter found for {title_key}'}, 404
 
-        _ = self._insert_record(response.get('data'))      
-        wrapped_response = self._wrapped_response(response.get('data'))
+            _ = self._insert_record(response.get('data'))      
         
+            wrapped_response = self._wrapped_response(response.get('data'))
+        
+        else:
+            wrapped_response = self._wrapped_response(chapter_docs)
+       
         r.set(manga_id, json.dumps(wrapped_response))
-        
         return wrapped_response, 200
     
     def _fetch(self, manga_id: str):
@@ -94,10 +98,12 @@ class Manga(Resource):
         wrapped_response = {}
 
         for chapter in data:
-            wrapped_response[int(chapter['attributes']['chapter'])] = chapter
+            if chapter.get('details'):
+                wrapped_response[int(chapter['details']['attributes']['chapter'])] = chapter['details']
+            else:
+                wrapped_response[int(chapter['attributes']['chapter'])] = chapter
 
         # sort the dictionary to asc order    
-
         return dict(sorted(wrapped_response.items()))
 
     @staticmethod 

@@ -1,10 +1,11 @@
 import requests
 import json
-from flask import request
+from flask import request, current_app
 from flask_restful import Resource
 from backend.database.database import manga_collection
 from backend.app.manga.lib.utils import utils
 from backend.database.redis import r
+from backend.app.global_var import manga_dex_url
 
 
 
@@ -12,11 +13,9 @@ class MangaList(Resource):
     """
     Class for searching manga title
     Request would be processed according to this order
-    Request -> Redis (Search) -> Mongo (Search) -> Call Mangadex API
-    Response -> Store to Mongo -> Send to the client
+    Request -> Redis (Search) -> Call MangaDex API
+    Response -> Store to Mongo -> Store to redis -> Send to the client
     """
-    base_url = "https://api.mangadex.org"
-
 
     def get(self):
         args = request.args
@@ -30,29 +29,17 @@ class MangaList(Resource):
         result = r.get(title_in_key_format)
 
         if not result:
-            # look in database
-            title_in_pascal_case = utils.transform_to_pascal_case(title)
-            record = manga_collection.find({
-                'details.attributes.title.en': {'$regex': title_in_pascal_case}
-            })
+            # call the mangadex api to find the manga
+            # store the response in db and redis
+            response = self._fetch(title)
 
-            wrapped_data = {}
-        
-            if (len(list(record.clone()))):
-                wrapped_data = utils.wrapped_response(record, from_db=True)
-                r.set(title_in_key_format, json.dumps(wrapped_data))
+            if not response:
+                return {'msg': 'no result found'}
+            
+            _ = self._insert_record(response.content)
+            wrapped_data = self.wrapped_response(response.get('data'))
 
-            else:
-                # call the mangadex api to find the manga
-                # store the response in db and redis
-                response = self._fetch(title)
-                _ = self._insert_record(**response)
-                wrapped_data = utils.wrapped_response(response, from_db=False)
-
-                r.set(title_in_key_format, json.dumps(wrapped_data))
-
-            if not wrapped_data:
-                return {'msg': 'no result found'}, 404
+            r.set(title_in_key_format, json.dumps(wrapped_data))
 
             return wrapped_data, 200
 
@@ -64,7 +51,7 @@ class MangaList(Resource):
             return {'msg': 'title must be indicated.'}, 400
 
         response = requests.get(
-            f"{self.base_url}/manga",
+            f"{manga_dex_url}/manga",
             params={
                 'title': title,
                 'limit': 20,
@@ -75,16 +62,38 @@ class MangaList(Resource):
         if not response:
             return {}
         
-        response = response.json()
+        try:
+            response = response.content
+
+        except requests.JSONDecodeError:
+            current_app.logger.info('unable to decode response due to empty body')
+            return {}
 
         if response['result'] == "error" or response.get('error'):
             return {}  
 
         return response
     
+    @staticmethod
+    def wrapped_response(data: dict):
+
+        if not data: 
+            return {}
+
+        wrapped_data = {}
+        for manga in data:
+            title = manga['attributes']['title']['en']
+
+            title_in_key_format = utils.transform_to_key_format(title)
+            wrapped_data[title_in_key_format] = {
+                "title": title,
+                "endpoint": f"/{title_in_key_format}"
+            }
+
+        return wrapped_data
+
     @staticmethod 
-    def _insert_record(**kwargs):
-        data = kwargs.get('data')
+    def _insert_record(data: dict):
 
         if not data:
             return False
@@ -94,7 +103,7 @@ class MangaList(Resource):
         for manga in data:
             title = manga['attributes']['title']['en']
 
-            if manga_collection.find_one({'attributes.title.en': title}):
+            if manga_collection.find_one({'id': manga['id']}):
                 continue
             
             manga_collection.insert_one({'details': manga, 'title_key': utils.transform_to_key_format(title)})

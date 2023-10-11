@@ -1,27 +1,8 @@
-from backend.database.database import collection
 import re
 
 class Utils:
 
-    @staticmethod 
-    def insert_record(**kwargs):
-        data = kwargs.get('data')
 
-        if not data:
-            return False
-        
-        # sample format of the response data from mangadex API
-        # {data: [{"id": "", "attributes": {"title": {"en": ""}}}}
-        for manga in data:
-            title = manga['attributes']['title']['en']
-
-            if collection.find_one({'attributes.title.en': title}):
-                continue
-            
-            collection.insert_one({'details': manga})
-
-        return True
-    
     @staticmethod
     def transform_to_pascal_case(text: str):
         return text.title()
@@ -34,7 +15,7 @@ class Utils:
     
     @staticmethod
     def wrapped_response(data: dict, from_db: bool):
-        
+
         if not data: 
             return {}
 

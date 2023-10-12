@@ -36,7 +36,7 @@ class MangaList(Resource):
             if not response:
                 return {'msg': 'no result found'}
             
-            _ = self._insert_record(response.content)
+            _ = self._insert_record(response)
             wrapped_data = self.wrapped_response(response.get('data'))
 
             r.set(title_in_key_format, json.dumps(wrapped_data))
@@ -63,14 +63,14 @@ class MangaList(Resource):
             return {}
         
         try:
-            response = response.content
+            response = response.json()
 
         except requests.JSONDecodeError:
             current_app.logger.info('unable to decode response due to empty body')
             return {}
-
-        if response['result'] == "error" or response.get('error'):
-            return {}  
+        
+        if response['result'] == "error":
+            return {}
 
         return response
     

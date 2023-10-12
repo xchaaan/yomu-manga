@@ -74,18 +74,22 @@ class Manga(Resource):
             params={
                 'manga': manga_id,
                 'limit': 100,
-                'volume': 1,
+                'order[chapter]': 'asc',
+                'translatedLanguage[]': 'en',
             }
         )
 
         if not response:
-            {}
+            return {}
         
         try:
             response = response.json()
 
         except requests.JSONDecodeError:
             current_app.logger.info('unable to decode the response due to empty body')
+            return {}
+        
+        if response['result'] == "error":
             return {}
         
         return response

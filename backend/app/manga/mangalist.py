@@ -36,7 +36,7 @@ class MangaList(Resource):
             if not response:
                 return {'msg': 'no result found'}
             
-            _ = self._insert_record(response)
+            _ = self._insert_record(response.get('data'))
             wrapped_data = self.wrapped_response(response.get('data'))
 
             r.set(title_in_key_format, json.dumps(wrapped_data))
@@ -103,7 +103,7 @@ class MangaList(Resource):
         for manga in data:
             title = manga['attributes']['title']['en']
 
-            if manga_collection.find_one({'id': manga['id']}):
+            if manga_collection.find_one({'details.id': manga['id']}):
                 continue
             
             manga_collection.insert_one({'details': manga, 'title_key': utils.transform_to_key_format(title)})

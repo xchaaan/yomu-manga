@@ -5,3 +5,4 @@ mongo_client = MongoClient(mongo_uri)
 db = mongo_client['yomu_manga']
 manga_collection = db['manga']
 chapter_collection = db['chapters']
+author_colletion = db['author']

@@ -37,11 +37,11 @@ class MangaList(Resource):
                 return {'msg': 'no result found'}
             
             _ = self._insert_record(response.get('data'))
-            wrapped_data = self.wrapped_response(response.get('data'))
+            api_response = self._build_api_response(response.get('data'))
 
-            r.set(title_in_key_format, json.dumps(wrapped_data))
+            r.set(title_in_key_format, json.dumps(api_response))
 
-            return wrapped_data, 200
+            return api_response, 200
 
         return json.loads(result), 200
 
@@ -75,7 +75,7 @@ class MangaList(Resource):
         return response
     
     @staticmethod
-    def wrapped_response(data: dict):
+    def _build_api_response(data: dict):
 
         if not data: 
             return {}

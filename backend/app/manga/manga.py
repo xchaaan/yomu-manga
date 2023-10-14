@@ -16,39 +16,35 @@ class Manga(Resource):
     Class for giving response containing all the necessary details for the specific manga
     Title, Chapter list and Author
     """
-    LIMIT = 100
+    LIMIT = 500
 
-    def get(self, title_key: str):
+    def get(self, manga_id: str):
 
-        if not title_key:
-            return {'msg': 'title not found'}, 404
+        if not manga_id:
+            return {'msg': 'manga not found'}, 404
         
         # accept optional body with keys order and offset
         # offset is use to get the subset of records starting with the given value
         args = request.args
-
         order = args.get('order', 'asc')
         offset = int(args.get('offset', 0))
 
-        # get the uuid of this title_key from the database
-        document = manga_collection.find_one({'title_key': title_key})
+        # search for a record from the database using the uuid in query param
+        document = manga_collection.find_one({'details.id': manga_id})
 
         if not document:
-            # we need to invoke the method from mangalist class
-            title_query = utils.transform_to_pascal_case(title_key).replace("-", " ")
-            response = requests.get(
-                url="http://127.0.0.1:5000/manga",
-                params={'title': title_query},
-                headers={'Content-Type': 'application/json'}
-            )
+            # we need to find the manga using API thru ID
+            response = requests.get(f"{manga_dex_url}/manga/{manga_id}")
 
             if response.status_code != 200: 
                 return {'msg': 'manga not found'}, 404
+            
+            response_body = response.get('data')
+            _ = manga_collection.insert_one({'details': response_body})
 
-        document = manga_collection.find_one({'title_key': title_key})
-        manga_id = document['details']['id']
-        manga_title = document['details']['attributes']['title']['en']
-        author_id = document['details']['relationships'][0]['id'] 
+        document = document.get('details') if document else response
+        manga_title = document['attributes']['title']['en']
+        author_id = document['relationships'][0]['id'] 
         author_name = author.get_author(author_id)
         redis_key = f"manga-{manga_id}-{order}-{str(offset)}"
 
@@ -56,6 +52,7 @@ class Manga(Resource):
         response = r.get(redis_key)
 
         if response:
+            current_app.logger.info(f'serving cached response for manga: {manga_id}')
             return json.loads(response), 200
 
         # we can look into the database. this way we can avoid sending request
@@ -80,11 +77,11 @@ class Manga(Resource):
             response = self._fetch(manga_id, **params)
  
             if not response:
-                return {'msg': f'no available chapter found for {title_key}'}, 404
+                return {'msg': f'no available chapter found for {manga_title}'}, 404
 
-            _ = self._insert_record(response.get('data'), title_key)      
+            _ = self._insert_record(response.get('data'), manga_title)      
         
-        api_response = self._building_api_response(
+        api_response = self._build_api_response(
             data=response.get('data') if response else chapter_docs, 
             order=order,
             author=author_name,
@@ -97,9 +94,8 @@ class Manga(Resource):
     def _fetch(self, manga_id: str, **kwargs):
         # send a request to the API
         response = requests.get(
-            f"{manga_dex_url}/chapter",
+            f"{manga_dex_url}/manga/{manga_id}/feed",
             params={
-                'manga': manga_id,
                 'limit': self.LIMIT,
                 'offset': kwargs.get('offset'),
                 'order[chapter]': kwargs.get('order'),
@@ -123,26 +119,24 @@ class Manga(Resource):
         return response
     
     @staticmethod
-    def _building_api_response(**kwargs):
+    def _build_api_response(**kwargs):
         if not kwargs.get('data'):
             return {}
         
         api_response = {}
 
         for chapter in kwargs.get('data'):
-            if chapter.get('details'):
-                key = int(chapter['details']['attributes']['chapter'])
-                value =  chapter['details']
-            else:
-                key = api_response[int(chapter['attributes']['chapter'])]
-                value = chapter
+            data = chapter.get('details') if chapter.get('details') else chapter
+            key = data['attributes']['chapter']
+            key = float(key) if not key.isdigit() else int(key)
 
+            # the response body
             api_response[key] = {
-                'chapter_id': value['id'],
+                'chapter_id': data['id'],
                 'title': kwargs.get('title'),
                 'author': kwargs.get('author')['author']
             }
-            
+
         # sort the dictionary base on order value 
         return dict(sorted(
             api_response.items(), reverse=kwargs.get('order') == 'desc'

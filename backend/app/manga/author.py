@@ -1,6 +1,7 @@
 from backend.database.redis import r
 from backend.app.global_var import manga_dex_url
 from backend.database.database import author_colletion
+from flask import current_app
 import json
 import requests
 
@@ -12,6 +13,7 @@ class Author:
         response = r.get(redis_key)
 
         if response:
+            current_app.logger.info('serving cached response for author')
             return json.loads(response)
         
         document = author_colletion.find_one({'details.id': author_id})

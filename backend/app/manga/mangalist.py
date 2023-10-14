@@ -16,6 +16,7 @@ class MangaList(Resource):
     Request -> Redis (Search) -> Call MangaDex API
     Response -> Store to Mongo -> Store to redis -> Send to the client
     """
+    LIMIT = 20
 
     def get(self):
         args = request.args
@@ -43,6 +44,7 @@ class MangaList(Resource):
 
             return api_response, 200
 
+        current_app.logger.info('serving cached response for manga list')
         return json.loads(result), 200
 
     def _fetch(self, title: str):
@@ -54,7 +56,7 @@ class MangaList(Resource):
             f"{manga_dex_url}/manga",
             params={
                 'title': title,
-                'limit': 20,
+                'limit': self.LIMIT,
             },
         )
 
@@ -83,11 +85,11 @@ class MangaList(Resource):
         wrapped_data = {}
         for manga in data:
             title = manga['attributes']['title']['en']
-
             title_in_key_format = utils.transform_to_key_format(title)
             wrapped_data[title_in_key_format] = {
                 "title": title,
-                "endpoint": f"/{title_in_key_format}"
+                "endpoint": f"/manga/{manga['id']}",
+                "id": manga['id']
             }
 
         return wrapped_data
@@ -106,6 +108,6 @@ class MangaList(Resource):
             if manga_collection.find_one({'details.id': manga['id']}):
                 continue
             
-            manga_collection.insert_one({'details': manga, 'title_key': utils.transform_to_key_format(title)})
+            manga_collection.insert_one({'details': manga})
 
         return True

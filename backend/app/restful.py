@@ -6,4 +6,4 @@ def create_resources(app):
     api = Api(app)
 
     api.add_resource(MangaList, '/manga')
-    api.add_resource(Manga, '/manga/<string:title_key>')
+    api.add_resource(Manga, '/manga/<string:manga_id>')

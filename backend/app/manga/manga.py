@@ -49,11 +49,11 @@ class Manga(Resource):
         redis_key = f"manga-{manga_id}-{order}-{str(offset)}"
 
         # look first in the redis if we have cached the response
-        response = r.get(redis_key)
+        cached_response = r.get(redis_key)
 
-        if response:
+        if cached_response:
             current_app.logger.info(f'serving cached response for manga: {manga_id}')
-            return json.loads(response), 200
+            return json.loads(cached_response), 200
 
         # we can look into the database. this way we can avoid sending request
         order_type = pymongo.ASCENDING if order == 'asc' else pymongo.DESCENDING
@@ -86,6 +86,7 @@ class Manga(Resource):
             order=order,
             author=author_name,
             title=manga_title,
+            manga_id=manga_id,
         )
     
         r.set(redis_key, json.dumps(api_response))
@@ -134,7 +135,8 @@ class Manga(Resource):
             api_response[key] = {
                 'chapter_id': data['id'],
                 'title': kwargs.get('title'),
-                'author': kwargs.get('author')['author']
+                'author': kwargs.get('author')['author'],
+                'end_point': f'/manga/{kwargs.get("manga_id")}/{data["id"]}'
             }
 
         # sort the dictionary base on order value 

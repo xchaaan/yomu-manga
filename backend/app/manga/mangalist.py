@@ -27,9 +27,9 @@ class MangaList(Resource):
 
         # look the title in redis first to avoid processing request in database
         title_in_key_format = utils.transform_to_key_format(title)
-        result = r.get(title_in_key_format)
+        cached_response = r.get(title_in_key_format)
 
-        if not result:
+        if not cached_response:
             # call the mangadex api to find the manga
             # store the response in db and redis
             response = self._fetch(title)
@@ -45,7 +45,7 @@ class MangaList(Resource):
             return api_response, 200
 
         current_app.logger.info('serving cached response for manga list')
-        return json.loads(result), 200
+        return json.loads(cached_response), 200
 
     def _fetch(self, title: str):
 

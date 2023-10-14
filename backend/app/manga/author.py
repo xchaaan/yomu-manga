@@ -10,11 +10,11 @@ class Author:
     
     def get_author(self, author_id: str):
         redis_key = f"author-{author_id}"
-        response = r.get(redis_key)
+        cached_response = r.get(redis_key)
 
-        if response:
+        if cached_response:
             current_app.logger.info('serving cached response for author')
-            return json.loads(response)
+            return json.loads(cached_response)
         
         document = author_colletion.find_one({'details.id': author_id})
 

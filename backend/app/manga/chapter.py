@@ -1,4 +1,4 @@
-from backend.app.global_var import manga_dex_url
+from backend.app.constants import MANGA_DEX_URL, CACHE_EXPIRY_IN_SECONDS
 from backend.database.redis import r
 from backend.database.database import image_collection
 from flask import current_app
@@ -25,8 +25,12 @@ class Chapter(Resource):
         document = image_collection.find_one({'_id': chapter_id})
 
         if document:
-            api_response = document['details']['chapters']
-            r.set(chapter_id, json.dumps(api_response))
+            api_response = document['details']
+            r.set(
+                chapter_id, 
+                json.dumps(api_response), 
+                ex=CACHE_EXPIRY_IN_SECONDS,
+            )
 
             return api_response, 200
 
@@ -36,13 +40,17 @@ class Chapter(Resource):
             return {'msg': 'chapter images not found'}, 404
         
         _ = self._insert_record(api_response.get('chapter'), chapter_id)
-        r.set(chapter_id, json.dumps(api_response.get('chapter')))
+        r.set(
+            chapter_id, 
+            json.dumps(api_response.get('chapter')),
+            ex=CACHE_EXPIRY_IN_SECONDS
+        )
         
         return api_response.get('chapter'), 200
 
     def _fetch(self, chapter_id: str):
         response = requests.get(
-            f'{manga_dex_url}/at-home/server/{chapter_id}'
+            f'{MANGA_DEX_URL}/at-home/server/{chapter_id}'
         )
 
         print(response.status_code)

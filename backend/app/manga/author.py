@@ -1,5 +1,5 @@
 from backend.database.redis import r
-from backend.app.global_var import manga_dex_url
+from backend.app.constants import MANGA_DEX_URL, CACHE_EXPIRY_IN_SECONDS
 from backend.database.database import author_colletion
 from flask import current_app
 import json
@@ -20,10 +20,14 @@ class Author:
 
         if document:
             author_name = {'author': document['details']['attributes']['name']}
-            r.set(redis_key, json.dumps(author_name))
+            r.set(
+                redis_key, 
+                json.dumps(author_name),
+                ex=CACHE_EXPIRY_IN_SECONDS,
+            )
 
         response = requests.get(
-            f"{manga_dex_url}/author/{author_id}"
+            f"{MANGA_DEX_URL}/author/{author_id}"
         )
 
         if not response:
@@ -33,7 +37,11 @@ class Author:
             response = response.json()
             _ = self._insert_record(response.get('data'))
             author_name = {'author': response.get('data')['attributes']['name']}
-            r.set(redis_key, json.dumps(author_name))
+            r.set(
+                redis_key, 
+                json.dumps(author_name),
+                ex=CACHE_EXPIRY_IN_SECONDS
+            )
 
             return author_name
 

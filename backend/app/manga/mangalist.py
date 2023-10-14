@@ -5,7 +5,7 @@ from flask_restful import Resource
 from backend.database.database import manga_collection
 from backend.app.manga.lib.utils import utils
 from backend.database.redis import r
-from backend.app.global_var import manga_dex_url
+from backend.app.constants import MANGA_DEX_URL, CACHE_EXPIRY_IN_SECONDS
 
 
 
@@ -40,7 +40,11 @@ class MangaList(Resource):
             _ = self._insert_record(response.get('data'))
             api_response = self._build_api_response(response.get('data'))
 
-            r.set(title_in_key_format, json.dumps(api_response))
+            r.set(
+                title_in_key_format,
+                json.dumps(api_response), 
+                ex=CACHE_EXPIRY_IN_SECONDS,
+            )
 
             return api_response, 200
 
@@ -53,7 +57,7 @@ class MangaList(Resource):
             return {'msg': 'title must be indicated.'}, 400
 
         response = requests.get(
-            f"{manga_dex_url}/manga",
+            f"{MANGA_DEX_URL}/manga",
             params={
                 'title': title,
                 'limit': self.LIMIT,

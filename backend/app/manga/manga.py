@@ -1,8 +1,7 @@
 from flask_restful import Resource
 from backend.database.database import manga_collection, chapter_collection
-from backend.app.manga.lib.utils import utils
 from backend.database.redis import r
-from backend.app.global_var import manga_dex_url
+from backend.app.constants import MANGA_DEX_URL, CACHE_EXPIRY_IN_SECONDS
 from backend.app.manga.author import author
 from flask import current_app
 from flask import request
@@ -34,7 +33,7 @@ class Manga(Resource):
 
         if not document:
             # we need to find the manga using API thru ID
-            response = requests.get(f"{manga_dex_url}/manga/{manga_id}")
+            response = requests.get(f"{MANGA_DEX_URL}/manga/{manga_id}")
 
             if response.status_code != 200: 
                 return {'msg': 'manga not found'}, 404
@@ -89,13 +88,17 @@ class Manga(Resource):
             manga_id=manga_id,
         )
     
-        r.set(redis_key, json.dumps(api_response))
+        r.set(
+            redis_key, 
+            json.dumps(api_response),
+            ex=CACHE_EXPIRY_IN_SECONDS,
+        )
         return api_response, 200
     
     def _fetch(self, manga_id: str, **kwargs):
         # send a request to the API
         response = requests.get(
-            f"{manga_dex_url}/manga/{manga_id}/feed",
+            f"{MANGA_DEX_URL}/manga/{manga_id}/feed",
             params={
                 'limit': self.LIMIT,
                 'offset': kwargs.get('offset'),

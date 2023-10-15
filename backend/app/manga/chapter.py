@@ -1,6 +1,7 @@
 from backend.app.constants import MANGA_DEX_URL, CACHE_EXPIRY_IN_SECONDS
 from backend.database.redis import r
-from backend.database.database import image_collection
+from backend.database.database import image_collection, chapter_collection
+from backend.app.manga.lib.images import images
 from flask import current_app
 from flask_restful import Resource
 
@@ -17,9 +18,9 @@ class Chapter(Resource):
 
         cached_response = r.get(chapter_id)
 
-        if cached_response:
-            current_app.logger.info('serving cached response for image url')
-            return json.loads(cached_response), 200
+        # if cached_response:
+        #     current_app.logger.info('serving cached response for image url')
+        #     return json.loads(cached_response), 200
         
         # look for database record
         document = image_collection.find_one({'_id': chapter_id})
@@ -32,6 +33,8 @@ class Chapter(Resource):
                 ex=CACHE_EXPIRY_IN_SECONDS,
             )
 
+            file_paths = self._get_image_path(api_response, chapter_id)
+
             return api_response, 200
 
         api_response = self._fetch(chapter_id)
@@ -39,13 +42,14 @@ class Chapter(Resource):
         if not api_response:
             return {'msg': 'chapter images not found'}, 404
         
-        _ = self._insert_record(api_response.get('chapter'), chapter_id)
+        _ = self._insert_record(api_response, chapter_id)
         r.set(
             chapter_id, 
             json.dumps(api_response.get('chapter')),
             ex=CACHE_EXPIRY_IN_SECONDS
         )
         
+
         return api_response.get('chapter'), 200
 
     def _fetch(self, chapter_id: str):
@@ -65,7 +69,6 @@ class Chapter(Resource):
         
         return response
 
-
     @staticmethod
     def _insert_record(data: dict, chapter_id: str):
         
@@ -76,5 +79,27 @@ class Chapter(Resource):
 
         return True
 
+    @staticmethod
+    def _get_image_path(data: dict, chapter_id: str):
+        if not (data and chapter_id):
+            return []
+        
+        document = chapter_collection.find_one({'details.id': chapter_id})
+        base_url = data['baseUrl']
+        url_hash = data['chapter']['hash']
+        file_paths = []
+        
+        for image_name in data['chapter']['dataSaver']:
+            url = f'{base_url}/data-saver/{url_hash}/{image_name}'
+            file_path = images.store(**{
+                'url': url,
+                'title': document['label'],
+                'chapter': document['details']['attributes']['chapter']
+            })
+            break
+            if file_path:
+                file_paths.append(file_path)
+
+        return file_paths
 
 chapter = Chapter()

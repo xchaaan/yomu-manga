@@ -159,8 +159,5 @@ class Manga(Resource):
             
             chapter_collection.insert_one({'details': chapter, 'label': label})
 
-        return True            
-
-
-
-        
+        return True         
+    

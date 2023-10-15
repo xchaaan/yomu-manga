@@ -1,4 +1,7 @@
 from flask import current_app
+from flask import request
+from backend.database.redis import r
+from backend.app.constants import CACHE_EXPIRY_IN_SECONDS
 
 import requests
 import os
@@ -16,16 +19,17 @@ class Images:
         if not (title and chapter and url):
             return None
         
-        path = f'../static/{title}/{chapter}'
         file_name = url.split("/")[-1]
+        path = f'static/{title}/{chapter}'
         file_path = f'{path}/{file_name}'
         
         if not os.path.exists(path):
             os.makedirs(path)
 
-        # check if file was already save.
+        server_path = f'{request.url_root}static/{title}/{chapter}/{file_name}'
+
         if os.path.exists(file_path):
-            return file_path
+            return server_path
 
         image_data = self._fetch(url)
         
@@ -34,13 +38,13 @@ class Images:
 
         # store the image in a specified folder
         # /static/{manga_title}/{chapter_number}/image
-        print (image_data)
 
-        # with open(file_path, 'wb') as handle:
-        #     current_app.logger.info(f'saving {file_path} into file system')
-            # handle.write(image_data)
+        with open(file_path, 'wb') as handle:
+            current_app.logger.info(f'saving {file_path} into file')
+            handle.write(image_data)
 
-        return file_path
+        return server_path
+
 
     def _fetch(self, url: str):
         response = requests.get(url=url)

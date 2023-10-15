@@ -8,7 +8,6 @@ from backend.database.redis import r
 from backend.app.constants import MANGA_DEX_URL, CACHE_EXPIRY_IN_SECONDS
 
 
-
 class MangaList(Resource):
     """
     Class for searching manga title

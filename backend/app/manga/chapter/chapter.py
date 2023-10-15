@@ -18,39 +18,39 @@ class Chapter(Resource):
 
         cached_response = r.get(chapter_id)
 
-        # if cached_response:
-        #     current_app.logger.info('serving cached response for image url')
-        #     return json.loads(cached_response), 200
+        if cached_response:
+            current_app.logger.info('serving cached response for image url')
+            return json.loads(cached_response), 200
         
         # look for database record
-        document = image_collection.find_one({'_id': chapter_id})
+        document = image_collection.find_one({'chapter_id': chapter_id})
 
         if document:
-            api_response = document['details']
+            file_paths = document['file_path']
             r.set(
                 chapter_id, 
-                json.dumps(api_response), 
+                json.dumps(file_paths), 
                 ex=CACHE_EXPIRY_IN_SECONDS,
             )
 
-            file_paths = self._get_image_path(api_response, chapter_id)
+            return {chapter_id: file_paths}, 200
 
-            return api_response, 200
+        response = self._fetch(chapter_id)
 
-        api_response = self._fetch(chapter_id)
-
-        if not api_response:
+        if not response:
             return {'msg': 'chapter images not found'}, 404
         
-        _ = self._insert_record(api_response, chapter_id)
+        ch_images = self._get_image_path(response, chapter_id)
+        _ = self._insert_record(ch_images, chapter_id)
+
+        api_response = {chapter_id: ch_images}
         r.set(
             chapter_id, 
-            json.dumps(api_response.get('chapter')),
-            ex=CACHE_EXPIRY_IN_SECONDS
+            json.dumps(api_response),
+            ex=CACHE_EXPIRY_IN_SECONDS,
         )
-        
 
-        return api_response.get('chapter'), 200
+        return api_response, 200
 
     def _fetch(self, chapter_id: str):
         response = requests.get(
@@ -75,7 +75,7 @@ class Chapter(Resource):
         if image_collection.find_one({'_id': chapter_id}):
             return False
         
-        image_collection.insert_one({'_id': chapter_id, 'details': data})
+        image_collection.insert_one({'_id': chapter_id, 'file_path': data})
 
         return True
 
@@ -94,12 +94,13 @@ class Chapter(Resource):
             file_path = images.store(**{
                 'url': url,
                 'title': document['label'],
-                'chapter': document['details']['attributes']['chapter']
+                'chapter': document['details']['attributes']['chapter'],
+                'chapter_id': chapter_id,
             })
-            break
+
             if file_path:
                 file_paths.append(file_path)
-
+   
         return file_paths
 
 chapter = Chapter()

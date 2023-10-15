@@ -2,7 +2,7 @@ from flask_restful import Resource
 from backend.database.database import manga_collection, chapter_collection
 from backend.database.redis import r
 from backend.app.constants import MANGA_DEX_URL, CACHE_EXPIRY_IN_SECONDS
-from backend.app.manga.author import author
+from backend.app.manga.author.author import author
 from flask import current_app
 from flask import request
 

@@ -1,7 +1,7 @@
 from flask_restful import Api
 from backend.app.manga.mangalist import MangaList
 from backend.app.manga.manga import Manga
-from backend.app.manga.chapter import Chapter
+from backend.app.manga.chapter.chapter import Chapter
 
 def create_resources(app):
     api = Api(app)
